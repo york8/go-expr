@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/expr-lang/expr/builtin"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/internal/testify/assert"
 	"github.com/expr-lang/expr/internal/testify/require"
@@ -1241,5 +1242,91 @@ func TestNodeBudgetDisabled(t *testing.T) {
 
 	if err != nil && strings.Contains(err.Error(), "exceeds maximum allowed nodes") {
 		t.Error("Node budget check should be disabled when MaxNodes is 0")
+	}
+}
+
+func TestCustomPredicateFuncParse(t *testing.T) {
+	config := conf.CreateNew()
+	config.Functions["foo"] = &builtin.Function{
+		Name: "foo",
+		Func: func(args ...any) (any, error) {
+			return nil, nil
+		},
+		Predicate: true,
+		FuncArgs:  []builtin.ArgType{builtin.ExprArg, builtin.PredicateArg},
+	}
+	config.Functions["each"] = &builtin.Function{
+		Name: "each",
+		Func: func(args ...any) (any, error) {
+			return nil, nil
+		},
+		Predicate: true,
+		FuncArgs:  []builtin.ArgType{builtin.ExprArg, builtin.PredicateArg},
+	}
+
+	tests := []struct {
+		input string
+		want  Node
+	}{
+		{
+			"foo(Tickets, #)",
+			&CallNode{
+				Callee: &IdentifierNode{Value: "foo"},
+				Arguments: []Node{
+					&IdentifierNode{Value: "Tickets"},
+					&PredicateNode{
+						Node: &PointerNode{},
+					}}},
+		},
+		{
+			"foo(Tickets, {.Price > 0})",
+			&CallNode{
+				Callee: &IdentifierNode{Value: "foo"},
+				Arguments: []Node{
+					&IdentifierNode{Value: "Tickets"},
+					&PredicateNode{
+						Node: &BinaryNode{
+							Operator: ">",
+							Left: &MemberNode{Node: &PointerNode{},
+								Property: &StringNode{Value: "Price"}},
+							Right: &IntegerNode{Value: 0}}}}},
+		},
+		{
+			`each([], #index)`,
+			&CallNode{
+				Callee: &IdentifierNode{Value: "each"},
+				Arguments: []Node{
+					&ArrayNode{},
+					&PredicateNode{
+						Node: &PointerNode{Name: "index"},
+					},
+				},
+			},
+		},
+		{
+			`each(ls, { 1; 2; 3 })`,
+			&CallNode{
+				Callee: &IdentifierNode{Value: "each"},
+				Arguments: []Node{
+					&IdentifierNode{Value: "ls"},
+					&PredicateNode{
+						Node: &SequenceNode{
+							Nodes: []Node{
+								&IntegerNode{Value: 1},
+								&IntegerNode{Value: 2},
+								&IntegerNode{Value: 3},
+							},
+						},
+					},
+				}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			actual, err := parser.ParseWithConfig(test.input, config)
+			require.NoError(t, err)
+			assert.Equal(t, Dump(test.want), Dump(actual.Node))
+		})
 	}
 }

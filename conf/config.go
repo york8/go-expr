@@ -97,3 +97,13 @@ func (c *Config) IsOverridden(name string) bool {
 	}
 	return false
 }
+
+func (c *Config) IsPredicate(name string) bool {
+	if c == nil || c.Functions == nil {
+		return false
+	}
+	if f, ok := c.Functions[name]; ok {
+		return f.Predicate && len(f.FuncArgs) > 0
+	}
+	return false
+}

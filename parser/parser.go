@@ -551,6 +551,7 @@ func (p *Parser) parseCall(token Token, arguments []Node, checkOverrides bool) N
 	}
 	isOverridden = isOverridden && checkOverrides
 
+	// Check built-in predicates first (for backward compatibility)
 	if b, ok := predicates[token.Value]; ok && !isOverridden {
 		p.expect(Bracket, "(")
 
@@ -590,6 +591,56 @@ func (p *Parser) parseCall(token Token, arguments []Node, checkOverrides bool) N
 
 		node = p.createNode(&BuiltinNode{
 			Name:      token.Value,
+			Arguments: arguments,
+		}, token.Location)
+		if node == nil {
+			return nil
+		}
+	} else if p.config != nil && p.config.IsPredicate(token.Value) {
+		p.expect(Bracket, "(")
+
+		// In case of the pipe operator, the first argument is the left-hand side
+		// of the operator, so we do not parse it as an argument inside brackets.
+		fn := p.config.Functions[token.Value]
+		args := fn.FuncArgs[len(arguments):]
+
+		for i, arg := range args {
+			if arg&builtin.OptionalArg == builtin.OptionalArg {
+				if p.current.Is(Bracket, ")") {
+					break
+				}
+			} else {
+				if p.current.Is(Bracket, ")") {
+					p.error("expected at least %d arguments", len(args))
+				}
+			}
+
+			if i > 0 {
+				p.expect(Operator, ",")
+			}
+			var node Node
+			switch {
+			case arg&builtin.ExprArg == builtin.ExprArg:
+				node = p.parseExpression(0)
+			case arg&builtin.PredicateArg == builtin.PredicateArg:
+				node = p.parsePredicate()
+			}
+			arguments = append(arguments, node)
+		}
+
+		// skip last comma
+		if p.current.Is(Operator, ",") {
+			p.next()
+		}
+		p.expect(Bracket, ")")
+
+		// Create CallNode for custom predicate functions
+		callee := p.createNode(&IdentifierNode{Value: token.Value}, token.Location)
+		if callee == nil {
+			return nil
+		}
+		node = p.createNode(&CallNode{
+			Callee:    callee,
 			Arguments: arguments,
 		}, token.Location)
 		if node == nil {

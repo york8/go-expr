@@ -154,6 +154,32 @@ func Function(name string, fn func(params ...any) (any, error), types ...any) Op
 	}
 }
 
+// PredicateFunction creates a function option with predicate support.
+// The args parameter defines the argument types where predicate arguments
+// are specified using special syntax.
+func PredicateFunction(name string, fn func(params ...any) (any, error), args []builtin.ArgType, types ...any) Option {
+	return func(c *conf.Config) {
+		ts := make([]reflect.Type, len(types))
+		for i, t := range types {
+			t := reflect.TypeOf(t)
+			if t.Kind() == reflect.Ptr {
+				t = t.Elem()
+			}
+			if t.Kind() != reflect.Func {
+				panic(fmt.Sprintf("expr: type of %s is not a function", name))
+			}
+			ts[i] = t
+		}
+		c.Functions[name] = &builtin.Function{
+			Name:      name,
+			Func:      fn,
+			Types:     ts,
+			Predicate: true,
+			FuncArgs:  args,
+		}
+	}
+}
+
 // DisableAllBuiltins disables all builtins.
 func DisableAllBuiltins() Option {
 	return func(c *conf.Config) {
