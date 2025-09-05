@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/expr-lang/expr/builtin"
 	"github.com/expr-lang/expr/internal/testify/assert"
 	"github.com/expr-lang/expr/internal/testify/require"
 	"github.com/expr-lang/expr/types"
@@ -143,6 +144,42 @@ func TestCheck(t *testing.T) {
 			require.NoError(t, err)
 
 			config := conf.New(mock.Env{})
+			expr.AsBool()(config)
+
+			_, err = checker.Check(tree, config)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestCustomPredicateCheck(t *testing.T) {
+	each := expr.PredicateFunction(
+		"each",
+		func(p ...any) (any, error) {
+			return p[0], nil
+		},
+		[]builtin.ArgType{builtin.ExprArg, builtin.PredicateArg},
+	)
+
+	config := conf.CreateNew()
+	each(config)
+
+	var tests = []struct {
+		input string
+	}{
+		{"each(1..3, {#}) == [1,2,3]"},
+		{"each(1..3, #index) == [0,1,2]"},
+		{"each({}, {#}) == {}"},
+		{"each({a:1, b:2}, {#}) == {a:1, b:2}"},
+		{"each(filter(ArrayOfFoo, {.Bar.Baz != ''}), {.Bar}) == []"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var err error
+			tree, err := parser.ParseWithConfig(tt.input, config)
+			require.NoError(t, err)
+
 			expr.AsBool()(config)
 
 			_, err = checker.Check(tree, config)

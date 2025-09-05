@@ -942,6 +942,11 @@ func (v *checker) checkBuiltinGet(node *ast.BuiltinNode) Nature {
 }
 
 func (v *checker) checkFunction(f *builtin.Function, node ast.Node, arguments []ast.Node) Nature {
+	// Handle predicate arguments for custom functions
+	if f.Predicate && len(f.FuncArgs) > 0 {
+		return v.checkPredicateFunction(f, node, arguments)
+	}
+
 	if f.Validate != nil {
 		args := make([]reflect.Type, len(arguments))
 		for i, arg := range arguments {
@@ -993,6 +998,60 @@ func (v *checker) checkFunction(f *builtin.Function, node ast.Node, arguments []
 	}
 
 	return v.error(node, "no matching overload for %v", f.Name)
+}
+
+// checkPredicateFunction handles type checking for custom functions with predicate arguments
+func (v *checker) checkPredicateFunction(f *builtin.Function, node ast.Node, arguments []ast.Node) Nature {
+	if len(arguments) != len(f.FuncArgs) {
+		return v.error(node, "function %v expects %d arguments, got %d", f.Name, len(f.FuncArgs), len(arguments))
+	}
+
+	var collection Nature
+	var predicateIndices []int
+
+	// First pass: identify collection and predicate arguments
+	for i, argType := range f.FuncArgs {
+		if argType&builtin.PredicateArg == builtin.PredicateArg {
+			predicateIndices = append(predicateIndices, i)
+		} else if argType&builtin.ExprArg == builtin.ExprArg {
+			// Visit expression arguments and try to identify collection
+			argNature := v.visit(arguments[i])
+			// For custom functions, accept any type as potential collection
+			// Let the calling function decide what constitutes a valid collection
+			if collection.Type == nil {
+				collection = argNature.Deref()
+			}
+		}
+	}
+
+	// Second pass: visit predicate arguments with proper scope
+	for _, predIdx := range predicateIndices {
+		if collection.Type != nil {
+			// Provide common scope variables that might be useful
+			// Add a marker to indicate this is a custom function context
+			v.begin(collection,
+				scopeVar{varName: "index", varNature: integerNature},
+				scopeVar{varName: "key", varNature: stringNature},
+				scopeVar{varName: "__custom_function__", varNature: boolNature})
+			v.visit(arguments[predIdx])
+			v.end()
+		} else {
+			// If no collection found, visit without scope (may cause errors)
+			v.visit(arguments[predIdx])
+		}
+	}
+
+	// Determine return type
+	if len(f.Types) > 0 {
+		// Use the first type signature's return type
+		fnType := f.Types[0]
+		if fnType.NumOut() > 0 {
+			return Nature{Type: fnType.Out(0)}
+		}
+	}
+
+	// Fallback to unknown if no type information available
+	return unknown
 }
 
 func (v *checker) checkArguments(
@@ -1175,6 +1234,27 @@ func (v *checker) PointerNode(node *ast.PointerNode) Nature {
 		if isUnknown(scope.collection) {
 			return unknown
 		}
+
+		// Check if we have a custom function context marker in scope vars
+		// Custom functions set a special marker to indicate flexible collection handling
+		if scope.vars != nil {
+			if _, isCustomFunction := scope.vars["__custom_function__"]; isCustomFunction {
+				// For custom functions, handle all collection types flexibly
+				switch scope.collection.Kind() {
+				case reflect.Array, reflect.Slice:
+					return scope.collection.Elem()
+				case reflect.Map:
+					return scope.collection.Elem()
+				case reflect.Struct:
+					return scope.collection
+				default:
+					// For custom functions, allow any type and return the collection itself
+					return scope.collection
+				}
+			}
+		}
+
+		// For builtin functions, maintain strict checking (only arrays/slices)
 		switch scope.collection.Kind() {
 		case reflect.Array, reflect.Slice:
 			return scope.collection.Elem()
