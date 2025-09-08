@@ -723,6 +723,7 @@ func TestExpr(t *testing.T) {
 		ArrayOfFoo:         []*mock.Foo{{Value: "foo"}, {Value: "bar"}, {Value: "baz"}},
 		MapOfFoo:           nil,
 		MapOfAny:           nil,
+		MapIntInt:          map[int]int{1: 1, 2: 2, 3: 3, 4: 4, 5: 5},
 		FuncParam:          nil,
 		FuncParamAny:       nil,
 		FuncTooManyReturns: nil,
@@ -996,6 +997,18 @@ func TestExpr(t *testing.T) {
 			[]any{1, 4, 9},
 		},
 		{
+			`each(1..3, {# * #})`,
+			[]any{1, 4, 9},
+		},
+		{
+			`each({a:1, b:2, c:3}, {# * #})`,
+			map[string]any{"a": 1, "b": 4, "c": 9},
+		},
+		{
+			`each(MapIntInt, {# * #})`,
+			map[int]any{1: 1, 2: 4, 3: 9, 4: 16, 5: 25},
+		},
+		{
 			`all(1..3, {# > 0})`,
 			true,
 		},
@@ -1124,6 +1137,10 @@ func TestExpr(t *testing.T) {
 			[]any{4, 5, 6},
 		},
 		{
+			`each(filter(ArrayOfInt, # >= 3), # + 1)`,
+			[]any{4, 5, 6},
+		},
+		{
 			`Time < Time + Duration`,
 			true,
 		},
@@ -1220,6 +1237,14 @@ func TestExpr(t *testing.T) {
 			[]any{[]any{3, 4}, []any{4, 5}},
 		},
 		{
+			`each(1..3, let x = #; let y = x * x; y * y)`,
+			[]any{1, 16, 81},
+		},
+		{
+			`each(1..2, let x = #; map(2..3, let y = #; x + y))`,
+			[]any{[]any{3, 4}, []any{4, 5}},
+		},
+		{
 			`len(filter(1..99, # % 7 == 0))`,
 			14,
 		},
@@ -1265,6 +1290,14 @@ func TestExpr(t *testing.T) {
 		},
 		{
 			`map(map(filter(1..9, # % 2 == 0), # * 2), # * 2)`,
+			[]any{8, 16, 24, 32},
+		},
+		{
+			`each(filter(1..9, # % 2 == 0), # * 2)`,
+			[]any{4, 8, 12, 16},
+		},
+		{
+			`each(each(filter(1..9, # % 2 == 0), # * 2), # * 2)`,
 			[]any{8, 16, 24, 32},
 		},
 		{

@@ -546,6 +546,18 @@ world`},
 					Right: &IdentifierNode{Value: "c"}}},
 		},
 		{
+			`each({}, #index)`,
+			&BuiltinNode{
+				Name: "each",
+				Arguments: []Node{
+					&MapNode{},
+					&PredicateNode{
+						Node: &PointerNode{Name: "index"},
+					},
+				},
+			},
+		},
+		{
 			`map([], #index)`,
 			&BuiltinNode{
 				Name: "map",
@@ -804,6 +816,23 @@ world`},
 						Cond: &BoolNode{Value: true},
 						Exp1: &IntegerNode{Value: 1},
 						Exp2: &IntegerNode{Value: 2}}}},
+		},
+		{
+			`each(ls, { 1; 2; 3 })`,
+			&BuiltinNode{
+				Name: "each",
+				Arguments: []Node{
+					&IdentifierNode{Value: "ls"},
+					&PredicateNode{
+						Node: &SequenceNode{
+							Nodes: []Node{
+								&IntegerNode{Value: 1},
+								&IntegerNode{Value: 2},
+								&IntegerNode{Value: 3},
+							},
+						},
+					},
+				}},
 		},
 		{
 			`map(ls, { 1; 2; 3 })`,

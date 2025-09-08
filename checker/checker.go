@@ -123,6 +123,7 @@ type checker struct {
 type predicateScope struct {
 	collection Nature
 	vars       map[string]Nature
+	isEach     bool
 }
 
 type varScope struct {
@@ -875,6 +876,36 @@ func (v *checker) BuiltinNode(node *ast.BuiltinNode) Nature {
 		}
 		return v.error(node.Arguments[1], "predicate should has two input and one output param")
 
+	case "each":
+		collection := v.visit(node.Arguments[0]).Deref()
+		if !isArray(collection) && !isMap(collection) && !isStruct(collection) && !isUnknown(collection) {
+			return v.error(node.Arguments[0], "builtin %v takes only array, map or struct (got %v)", node.Name, collection)
+		}
+
+		if len(node.Arguments) == 1 {
+			return collection
+		}
+
+		v.begin(collection, scopeVar{"index", integerNature}, scopeVar{"key", integerNature}, scopeVar{"acc", unknown}, scopeVar{"#each", stringNature})
+		predicate := v.visit(node.Arguments[1])
+		v.end()
+
+		if isFunc(predicate) && predicate.NumOut() == 1 {
+			if isArray(collection) {
+				return arrayOf(*predicate.PredicateOut)
+			} else if isStruct(collection) {
+				return mapNature
+			} else if isMap(collection) {
+				nt := Nature{Type: reflect.MapOf(collection.Type.Key(), reflect.TypeOf((*any)(nil)).Elem())}
+				nt.Fields = collection.Fields
+				return nt
+			} else if isUnknown(collection) {
+				return nilNature
+			}
+		}
+
+		return v.error(node.Arguments[1], "predicate should has two input and one output param")
+
 	}
 
 	if id, ok := builtin.Index[node.Name]; ok {
@@ -896,6 +927,10 @@ type scopeVar struct {
 func (v *checker) begin(collectionNature Nature, vars ...scopeVar) {
 	scope := predicateScope{collection: collectionNature, vars: make(map[string]Nature)}
 	for _, v := range vars {
+		if v.varName == "#each" {
+			scope.isEach = true
+			continue
+		}
 		scope.vars[v.varName] = v.varNature
 	}
 	v.predicateScopes = append(v.predicateScopes, scope)
@@ -1175,11 +1210,19 @@ func (v *checker) PointerNode(node *ast.PointerNode) Nature {
 		if isUnknown(scope.collection) {
 			return unknown
 		}
-		switch scope.collection.Kind() {
-		case reflect.Array, reflect.Slice:
-			return scope.collection.Elem()
+		if scope.isEach {
+			switch scope.collection.Kind() {
+			case reflect.Array, reflect.Slice, reflect.Map, reflect.Struct:
+				return scope.collection.Elem()
+			}
+			return v.error(node, "cannot use %v as array, map or struct", scope)
+		} else {
+			switch scope.collection.Kind() {
+			case reflect.Array, reflect.Slice:
+				return scope.collection.Elem()
+			}
+			return v.error(node, "cannot use %v as array", scope)
 		}
-		return v.error(node, "cannot use %v as array", scope)
 	}
 	if scope.vars != nil {
 		if t, ok := scope.vars[node.Name]; ok {

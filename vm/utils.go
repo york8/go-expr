@@ -20,6 +20,8 @@ type Scope struct {
 	Len   int
 	Count int
 	Acc   any
+	Keys  []any
+	Key   any // 当前迭代的 key（用于 map 和 struct）
 }
 
 type groupBy = map[any][]any

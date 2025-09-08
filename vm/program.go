@@ -372,6 +372,12 @@ func (program *Program) DisassembleWriter(w io.Writer) {
 		case OpBegin:
 			code("OpBegin")
 
+		case OpGetKey:
+			code("OpGetKey")
+
+		case OpBuildCollection:
+			code("OpGetCollection")
+
 		case OpEnd:
 			code("OpEnd")
 

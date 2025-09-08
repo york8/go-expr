@@ -102,6 +102,9 @@ func TestCheck(t *testing.T) {
 		{"map(1..3, {#}) == [1,2,3]"},
 		{"map(1..3, #index) == [0,1,2]"},
 		{"map(filter(ArrayOfFoo, {.Bar.Baz != ''}), {.Bar}) == []"},
+		{"each(1..3, {#}) == [1,2,3]"},
+		{"each(1..3, #index) == [0,1,2]"},
+		{"each(filter(ArrayOfFoo, {.Bar.Baz != ''}), {.Bar}) == []"},
 		{"filter(Any, {.AnyMethod()})[0] == ''"},
 		{"Time == Time"},
 		{"Any == Time"},
@@ -509,6 +512,12 @@ builtin map takes only array (got int) (1:5)
  | ....^
 `,
 		},
+		{`each(1, {2})`, `
+builtin each takes only array, map or struct (got int) (1:6)
+ | each(1, {2})
+ | .....^
+`,
+		},
 		{`ArrayOfFoo[Foo]`, `
 array elements can only be selected using an integer (got mock.Foo) (1:12)
  | ArrayOfFoo[Foo]
@@ -629,6 +638,12 @@ unknown pointer #unknown (1:11)
  | ..........^
 `,
 		},
+		{`each(1..9, #unknown)`, `
+unknown pointer #unknown (1:12)
+ | each(1..9, #unknown)
+ | ...........^
+`,
+		},
 		{`42 in ["a", "b", "c"]`, `
 cannot use int as type string in array (1:4)
  | 42 in ["a", "b", "c"]
@@ -670,6 +685,13 @@ invalid operation: == (mismatched types int and string) (1:33)
 invalid operation: > (mismatched types string and int) (1:30)
  | 1..3 | map("str") | filter(# > 1)
  | .............................^
+`,
+		},
+		{`1..3 | each("str") | filter(# > 1)`,
+			`
+invalid operation: > (mismatched types string and int) (1:31)
+ | 1..3 | each("str") | filter(# > 1)
+ | ..............................^
 `,
 		},
 		{
@@ -1130,6 +1152,7 @@ func TestCheck_types(t *testing.T) {
 		{`foo.bar.unknown + 42`, `invalid operation: + (mismatched types string and int)`},
 		{`[foo] | map(.unknown)`, `unknown field unknown`},
 		{`[foo] | map(.bar) | filter(.baz)`, `predicate should return boolean (got string)`},
+		{`foo | each(.baz)`, noerr},
 		{`arr | filter(.value > 0)`, `invalid operation: > (mismatched types string and int)`},
 		{`arr | filter(.value contains "a") | filter(.value == 0)`, `invalid operation: == (mismatched types string and int)`},
 	}
