@@ -84,5 +84,7 @@ const (
 	OpProfileStart
 	OpProfileEnd
 	OpBegin
+	OpGetKey
+	OpBuildCollection
 	OpEnd // This opcode must be at the end of this list.
 )

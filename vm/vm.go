@@ -474,6 +474,14 @@ func (vm *VM) Run(program *Program, env any) (_ any, err error) {
 		case OpGetIndex:
 			vm.push(vm.scope().Index)
 
+		case OpGetKey:
+			scope := vm.scope()
+			if scope.Index < len(scope.Keys) {
+				vm.push(scope.Keys[scope.Index])
+			} else {
+				vm.push(vm.scope().Index)
+			}
+
 		case OpGetCount:
 			scope := vm.scope()
 			vm.push(scope.Count)
@@ -555,10 +563,48 @@ func (vm *VM) Run(program *Program, env any) (_ any, err error) {
 		case OpBegin:
 			a := vm.pop()
 			array := reflect.ValueOf(a)
+			var keys []any = nil
+			if arg == 1 {
+				collection := array
+				switch collection.Kind() {
+				case reflect.Map:
+					mapKeys := array.MapKeys()
+					keys = make([]any, len(mapKeys))
+					vals := make([]any, len(mapKeys))
+					for i, key := range mapKeys {
+						keys[i] = key.Interface()
+						vals[i] = array.MapIndex(key).Interface()
+					}
+					array = reflect.ValueOf(vals)
+				case reflect.Struct:
+					structType := array.Type()
+					keys = make([]any, structType.NumField())
+					vals := make([]any, structType.NumField())
+					for i := 0; i < structType.NumField(); i++ {
+						keys[i] = structType.Field(i).Name
+						vals[i] = array.Field(i).Interface()
+					}
+					array = reflect.ValueOf(vals)
+				}
+			}
 			vm.Scopes = append(vm.Scopes, &Scope{
 				Array: array,
 				Len:   array.Len(),
+				Keys:  keys,
 			})
+
+		case OpBuildCollection:
+			scope := vm.scope()
+			a := vm.pop()
+			if scope.Keys == nil {
+				vm.push(a)
+			} else {
+				m := reflect.MakeMap(reflect.MapOf(reflect.TypeOf(scope.Keys[0]), reflect.TypeOf((*any)(nil)).Elem()))
+				for i, k := range scope.Keys {
+					m.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(a.([]any)[i]))
+				}
+				vm.push(m.Interface())
+			}
 
 		case OpEnd:
 			vm.Scopes = vm.Scopes[:len(vm.Scopes)-1]

@@ -35,6 +35,7 @@ var predicates = map[string]struct {
 	"any":           {[]arg{expr, predicate}},
 	"one":           {[]arg{expr, predicate}},
 	"filter":        {[]arg{expr, predicate}},
+	"each":          {[]arg{expr, predicate | optional}},
 	"map":           {[]arg{expr, predicate}},
 	"count":         {[]arg{expr, predicate | optional}},
 	"sum":           {[]arg{expr, predicate | optional}},
