@@ -59,6 +59,11 @@ var Builtins = []*Function{
 		Types:     types(new(func([]any, func(any) any) []any)),
 	},
 	{
+		Name:      "each",
+		Predicate: true,
+		Types:     types(new(func(any, func(any) any) any)),
+	},
+	{
 		Name:      "find",
 		Predicate: true,
 		Types:     types(new(func([]any, func(any) bool) any)),
