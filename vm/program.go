@@ -112,6 +112,9 @@ func (program *Program) DisassembleWriter(w io.Writer) {
 			} else {
 				c = "out of range"
 			}
+			if name, ok := program.debugInfo[fmt.Sprintf("const_%d", arg)]; ok {
+				c = name
+			}
 			if r, ok := c.(*regexp.Regexp); ok {
 				c = r.String()
 			}
@@ -377,6 +380,12 @@ func (program *Program) DisassembleWriter(w io.Writer) {
 
 		case OpBuildCollection:
 			code("OpGetCollection")
+
+		case OpAnd:
+			code("OpAnd")
+
+		case OpOr:
+			code("OpOr")
 
 		case OpEnd:
 			code("OpEnd")

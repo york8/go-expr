@@ -48,6 +48,7 @@ func Operator(operator string, fn ...string) Option {
 			Overloads: fn,
 			Env:       &c.Env,
 			Functions: c.Functions,
+			NtCache:   &c.NtCache,
 		}
 		c.Visitors = append(c.Visitors, p)
 	}
@@ -108,6 +109,14 @@ func AsFloat64() Option {
 	}
 }
 
+// DisableIfOperator disables the `if ... else ...` operator syntax so a custom
+// function named `if(...)` can be used without conflicts.
+func DisableIfOperator() Option {
+	return func(c *conf.Config) {
+		c.DisableIfOperator = true
+	}
+}
+
 // WarnOnAny tells the compiler to warn if expression return any type.
 func WarnOnAny() Option {
 	return func(c *conf.Config) {
@@ -122,6 +131,13 @@ func WarnOnAny() Option {
 func Optimize(b bool) Option {
 	return func(c *conf.Config) {
 		c.Optimize = b
+	}
+}
+
+// DisableShortCircuit turns short circuit off.
+func DisableShortCircuit() Option {
+	return func(c *conf.Config) {
+		c.ShortCircuit = false
 	}
 }
 
@@ -150,32 +166,6 @@ func Function(name string, fn func(params ...any) (any, error), types ...any) Op
 			Name:  name,
 			Func:  fn,
 			Types: ts,
-		}
-	}
-}
-
-// PredicateFunction creates a function option with predicate support.
-// The args parameter defines the argument types where predicate arguments
-// are specified using special syntax.
-func PredicateFunction(name string, fn func(params ...any) (any, error), args []builtin.ArgType, types ...any) Option {
-	return func(c *conf.Config) {
-		ts := make([]reflect.Type, len(types))
-		for i, t := range types {
-			t := reflect.TypeOf(t)
-			if t.Kind() == reflect.Ptr {
-				t = t.Elem()
-			}
-			if t.Kind() != reflect.Func {
-				panic(fmt.Sprintf("expr: type of %s is not a function", name))
-			}
-			ts[i] = t
-		}
-		c.Functions[name] = &builtin.Function{
-			Name:      name,
-			Func:      fn,
-			Types:     ts,
-			Predicate: true,
-			FuncArgs:  args,
 		}
 	}
 }

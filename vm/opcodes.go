@@ -86,5 +86,7 @@ const (
 	OpBegin
 	OpGetKey
 	OpBuildCollection
+	OpAnd
+	OpOr
 	OpEnd // This opcode must be at the end of this list.
 )

@@ -70,6 +70,17 @@ func ExampleCompile() {
 	// Output: true
 }
 
+func TestDisableIfOperator_AllowsIfFunction(t *testing.T) {
+	env := map[string]any{
+		"if": func(x int) int { return x + 1 },
+	}
+	program, err := expr.Compile("if(41)", expr.Env(env), expr.DisableIfOperator())
+	require.NoError(t, err)
+	out, err := expr.Run(program, env)
+	require.NoError(t, err)
+	assert.Equal(t, 42, out)
+}
+
 func ExampleEnv() {
 	type Segment struct {
 		Origin string
@@ -1424,6 +1435,10 @@ func TestExpr(t *testing.T) {
 			"a",
 		},
 		{
+			`if 1 == 2 { "no" } else if 1 == 1 { "yes" } else { "maybe" }`,
+			"yes",
+		},
+		{
 			`1; 2; 3`,
 			3,
 		},
@@ -1788,6 +1803,17 @@ func TestEval_exposed_error(t *testing.T) {
 	require.Equal(t, "runtime error: integer divide by zero (1:3)\n | 1 % 0\n | ..^", fileError.Error())
 	require.Equal(t, 2, fileError.Column)
 	require.Equal(t, 1, fileError.Line)
+}
+
+func TestCompile_exposed_error_with_multiline_script(t *testing.T) {
+	_, err := expr.Compile("{\n\ta: 1,\n\tb: #,\n\tc: 3,\n}")
+	require.Error(t, err)
+
+	fileError, ok := err.(*file.Error)
+	require.True(t, ok, "error should be of type *file.Error")
+	require.Equal(t, "unexpected token Operator(\"#\") (3:5)\n |  b: #,\n | ....^", fileError.Error())
+	require.Equal(t, 4, fileError.Column)
+	require.Equal(t, 3, fileError.Line)
 }
 
 func TestIssue105(t *testing.T) {
@@ -2340,23 +2366,16 @@ func TestEval_slices_out_of_bound(t *testing.T) {
 	}
 }
 
-func TestExpr_custom_tests(t *testing.T) {
-	f, err := os.Open("custom_tests.json")
-	if os.IsNotExist(err) {
-		t.Skip("no custom tests")
-		return
+func TestExpr_timeout(t *testing.T) {
+	tests := []struct{ code string }{
+		{`-999999..999999`},
+		{`map(1..999999, 1..999999)`},
+		{`map(1..999999, repeat('a', #))`},
 	}
 
-	require.NoError(t, err, "open file error")
-	defer f.Close()
-
-	var tests []string
-	err = json.NewDecoder(f).Decode(&tests)
-	require.NoError(t, err, "decode json error")
-
-	for id, tt := range tests {
-		t.Run(fmt.Sprintf("line %v", id+2), func(t *testing.T) {
-			program, err := expr.Compile(tt)
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			program, err := expr.Compile(tt.code)
 			require.NoError(t, err)
 
 			timeout := make(chan bool, 1)
@@ -2708,6 +2727,12 @@ func TestExpr_crash(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExpr_crash_with_zero(t *testing.T) {
+	code := "if\x00"
+	_, err := expr.Compile(code)
+	require.Error(t, err)
+}
+
 func TestExpr_nil_op_str(t *testing.T) {
 	// Let's test operators, which do `.(string)` in VM, also check for nil.
 
@@ -2911,4 +2936,29 @@ func TestIssue807(t *testing.T) {
 	if b {
 		t.Fatalf("expected 'in' operator to return false for unexported field")
 	}
+}
+
+func TestDisableShortCircuit(t *testing.T) {
+	count := 0
+	exprStr := "foo() or bar()"
+	env := map[string]any{
+		"foo": func() bool {
+			count++
+			return true
+		},
+		"bar": func() bool {
+			count++
+			return true
+		},
+	}
+
+	program, _ := expr.Compile(exprStr, expr.DisableShortCircuit())
+	got, _ := expr.Run(program, env)
+	assert.Equal(t, 2, count)
+	assert.True(t, got.(bool))
+
+	program, _ = expr.Compile(exprStr)
+	got, _ = expr.Run(program, env)
+	assert.Equal(t, 3, count)
+	assert.True(t, got.(bool))
 }

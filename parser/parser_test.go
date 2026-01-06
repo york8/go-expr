@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/expr-lang/expr/builtin"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/internal/testify/assert"
 	"github.com/expr-lang/expr/internal/testify/require"
@@ -198,15 +197,19 @@ world`},
 		},
 		{
 			"true ? true : false",
-			&ConditionalNode{Cond: &BoolNode{Value: true},
-				Exp1: &BoolNode{Value: true},
-				Exp2: &BoolNode{}},
+			&ConditionalNode{
+				Ternary: true,
+				Cond:    &BoolNode{Value: true},
+				Exp1:    &BoolNode{Value: true},
+				Exp2:    &BoolNode{}},
 		},
 		{
 			"a?[b]:c",
-			&ConditionalNode{Cond: &IdentifierNode{Value: "a"},
-				Exp1: &ArrayNode{Nodes: []Node{&IdentifierNode{Value: "b"}}},
-				Exp2: &IdentifierNode{Value: "c"}},
+			&ConditionalNode{
+				Ternary: true,
+				Cond:    &IdentifierNode{Value: "a"},
+				Exp1:    &ArrayNode{Nodes: []Node{&IdentifierNode{Value: "b"}}},
+				Exp2:    &IdentifierNode{Value: "c"}},
 		},
 		{
 			"a.b().c().d[33]",
@@ -397,6 +400,7 @@ world`},
 		{
 			"2==2 ? false : 3 not in [1, 2, 5]",
 			&ConditionalNode{
+				Ternary: true,
 				Cond: &BinaryNode{
 					Operator: "==",
 					Left:     &IntegerNode{Value: 2},
@@ -673,6 +677,29 @@ world`},
 				Exp2: &IdentifierNode{Value: "x"}},
 		},
 		{
+			"if a { 1 } else if b { 2 } else { 3 }",
+			&ConditionalNode{
+				Cond: &IdentifierNode{Value: "a"},
+				Exp1: &IntegerNode{Value: 1},
+				Exp2: &ConditionalNode{
+					Cond: &IdentifierNode{Value: "b"},
+					Exp1: &IntegerNode{Value: 2},
+					Exp2: &IntegerNode{Value: 3}}},
+		},
+		{
+			"if a { 1 } else if b { 2 } else if c { 3 } else { 4 }",
+			&ConditionalNode{
+				Cond: &IdentifierNode{Value: "a"},
+				Exp1: &IntegerNode{Value: 1},
+				Exp2: &ConditionalNode{
+					Cond: &IdentifierNode{Value: "b"},
+					Exp1: &IntegerNode{Value: 2},
+					Exp2: &ConditionalNode{
+						Cond: &IdentifierNode{Value: "c"},
+						Exp1: &IntegerNode{Value: 3},
+						Exp2: &IntegerNode{Value: 4}}}},
+		},
+		{
 			"1; 2; 3",
 			&SequenceNode{
 				Nodes: []Node{
@@ -700,9 +727,10 @@ world`},
 			&SequenceNode{
 				Nodes: []Node{
 					&ConditionalNode{
-						Cond: &BoolNode{Value: true},
-						Exp1: &IntegerNode{Value: 1},
-						Exp2: &IntegerNode{Value: 2}},
+						Ternary: true,
+						Cond:    &BoolNode{Value: true},
+						Exp1:    &IntegerNode{Value: 1},
+						Exp2:    &IntegerNode{Value: 2}},
 					&IntegerNode{Value: 3},
 					&IntegerNode{Value: 4},
 				},
@@ -711,8 +739,9 @@ world`},
 		{
 			"true ? 1 : ( 2; 3; 4 )",
 			&ConditionalNode{
-				Cond: &BoolNode{Value: true},
-				Exp1: &IntegerNode{Value: 1},
+				Ternary: true,
+				Cond:    &BoolNode{Value: true},
+				Exp1:    &IntegerNode{Value: 1},
 				Exp2: &SequenceNode{
 					Nodes: []Node{
 						&IntegerNode{Value: 2},
@@ -727,9 +756,10 @@ world`},
 			&SequenceNode{
 				Nodes: []Node{
 					&ConditionalNode{
-						Cond: &BoolNode{Value: true},
-						Exp1: &BoolNode{Value: true},
-						Exp2: &IntegerNode{Value: 1}},
+						Ternary: true,
+						Cond:    &BoolNode{Value: true},
+						Exp1:    &BoolNode{Value: true},
+						Exp2:    &IntegerNode{Value: 1}},
 					&IntegerNode{Value: 2},
 					&IntegerNode{Value: 3},
 				},
@@ -740,9 +770,10 @@ world`},
 			&VariableDeclaratorNode{
 				Name: "x",
 				Value: &ConditionalNode{
-					Cond: &BoolNode{Value: true},
-					Exp1: &IntegerNode{Value: 1},
-					Exp2: &IntegerNode{Value: 2}},
+					Ternary: true,
+					Cond:    &BoolNode{Value: true},
+					Exp1:    &IntegerNode{Value: 1},
+					Exp2:    &IntegerNode{Value: 2}},
 				Expr: &IdentifierNode{Value: "x"}},
 		},
 		{
@@ -750,8 +781,9 @@ world`},
 			&VariableDeclaratorNode{
 				Name: "x",
 				Value: &ConditionalNode{
-					Cond: &BoolNode{Value: true},
-					Exp1: &IntegerNode{Value: 1},
+					Ternary: true,
+					Cond:    &BoolNode{Value: true},
+					Exp1:    &IntegerNode{Value: 1},
 					Exp2: &SequenceNode{
 						Nodes: []Node{
 							&IntegerNode{Value: 2},
@@ -775,7 +807,8 @@ world`},
 					Nodes: []Node{
 						&IntegerNode{Value: 4},
 						&IntegerNode{Value: 5},
-						&IntegerNode{Value: 6}}}},
+						&IntegerNode{Value: 6}}},
+			},
 		},
 		{
 			`all(ls, if true { 1 } else { 2 })`,
@@ -787,7 +820,8 @@ world`},
 						Node: &ConditionalNode{
 							Cond: &BoolNode{Value: true},
 							Exp1: &IntegerNode{Value: 1},
-							Exp2: &IntegerNode{Value: 2}}}}},
+							Exp2: &IntegerNode{Value: 2},
+						}}}},
 		},
 		{
 			`let x = if true { 1 } else { 2 }; x`,
@@ -796,7 +830,8 @@ world`},
 				Value: &ConditionalNode{
 					Cond: &BoolNode{Value: true},
 					Exp1: &IntegerNode{Value: 1},
-					Exp2: &IntegerNode{Value: 2}},
+					Exp2: &IntegerNode{Value: 2},
+				},
 				Expr: &IdentifierNode{Value: "x"}},
 		},
 		{
@@ -807,7 +842,8 @@ world`},
 					&ConditionalNode{
 						Cond: &BoolNode{Value: true},
 						Exp1: &IntegerNode{Value: 1},
-						Exp2: &IntegerNode{Value: 2}}}},
+						Exp2: &IntegerNode{Value: 2},
+					}}},
 		},
 		{
 			`[if true { 1 } else { 2 }]`,
@@ -816,7 +852,8 @@ world`},
 					&ConditionalNode{
 						Cond: &BoolNode{Value: true},
 						Exp1: &IntegerNode{Value: 1},
-						Exp2: &IntegerNode{Value: 2}}}},
+						Exp2: &IntegerNode{Value: 2},
+					}}},
 		},
 		{
 			`each(ls, { 1; 2; 3 })`,
@@ -1051,6 +1088,12 @@ func TestParse_error(t *testing.T) {
  | ....^`,
 		},
 		{
+			`if a { 1 } else b`,
+			`unexpected token Identifier("b") (1:17)
+ | if a { 1 } else b
+ | ................^`,
+		},
+		{
 			`list | all(#,,)`,
 			`unexpected token Operator(",") (1:14)
  | list | all(#,,)
@@ -1271,91 +1314,5 @@ func TestNodeBudgetDisabled(t *testing.T) {
 
 	if err != nil && strings.Contains(err.Error(), "exceeds maximum allowed nodes") {
 		t.Error("Node budget check should be disabled when MaxNodes is 0")
-	}
-}
-
-func TestCustomPredicateFuncParse(t *testing.T) {
-	config := conf.CreateNew()
-	config.Functions["foo"] = &builtin.Function{
-		Name: "foo",
-		Func: func(args ...any) (any, error) {
-			return nil, nil
-		},
-		Predicate: true,
-		FuncArgs:  []builtin.ArgType{builtin.ExprArg, builtin.PredicateArg},
-	}
-	config.Functions["each"] = &builtin.Function{
-		Name: "each",
-		Func: func(args ...any) (any, error) {
-			return nil, nil
-		},
-		Predicate: true,
-		FuncArgs:  []builtin.ArgType{builtin.ExprArg, builtin.PredicateArg},
-	}
-
-	tests := []struct {
-		input string
-		want  Node
-	}{
-		{
-			"foo(Tickets, #)",
-			&CallNode{
-				Callee: &IdentifierNode{Value: "foo"},
-				Arguments: []Node{
-					&IdentifierNode{Value: "Tickets"},
-					&PredicateNode{
-						Node: &PointerNode{},
-					}}},
-		},
-		{
-			"foo(Tickets, {.Price > 0})",
-			&CallNode{
-				Callee: &IdentifierNode{Value: "foo"},
-				Arguments: []Node{
-					&IdentifierNode{Value: "Tickets"},
-					&PredicateNode{
-						Node: &BinaryNode{
-							Operator: ">",
-							Left: &MemberNode{Node: &PointerNode{},
-								Property: &StringNode{Value: "Price"}},
-							Right: &IntegerNode{Value: 0}}}}},
-		},
-		{
-			`each([], #index)`,
-			&CallNode{
-				Callee: &IdentifierNode{Value: "each"},
-				Arguments: []Node{
-					&ArrayNode{},
-					&PredicateNode{
-						Node: &PointerNode{Name: "index"},
-					},
-				},
-			},
-		},
-		{
-			`each(ls, { 1; 2; 3 })`,
-			&CallNode{
-				Callee: &IdentifierNode{Value: "each"},
-				Arguments: []Node{
-					&IdentifierNode{Value: "ls"},
-					&PredicateNode{
-						Node: &SequenceNode{
-							Nodes: []Node{
-								&IntegerNode{Value: 1},
-								&IntegerNode{Value: 2},
-								&IntegerNode{Value: 3},
-							},
-						},
-					},
-				}},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.input, func(t *testing.T) {
-			actual, err := parser.ParseWithConfig(test.input, config)
-			require.NoError(t, err)
-			assert.Equal(t, Dump(test.want), Dump(actual.Node))
-		})
 	}
 }

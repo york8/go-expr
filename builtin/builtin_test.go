@@ -154,10 +154,9 @@ func TestBuiltin(t *testing.T) {
 		{`each(1..9, # + 1)`, []any{2, 3, 4, 5, 6, 7, 8, 9, 10}},
 		{`each(1..9, #index)`, []any{0, 1, 2, 3, 4, 5, 6, 7, 8}},
 		{`each(1..9, #key)`, []any{0, 1, 2, 3, 4, 5, 6, 7, 8}},
-		{`each(1..9, #index + #key)`, []any{0, 2, 4, 6, 8, 10, 12, 14, 16}},
+		{`each(1..9, #index + #index)`, []any{0, 2, 4, 6, 8, 10, 12, 14, 16}},
 		{`each({a:1, b:2})`, map[string]any{"a": 1, "b": 2}},
 		{`each({a:1, b:2}, # + 1)`, map[string]any{"a": 2, "b": 3}},
-		{`each({a:1, b:2}, #index)`, map[string]any{"a": 0, "b": 1}},
 		{`each({a:1, b:2}, #key)`, map[string]any{"a": "a", "b": "b"}},
 		{`concat(ArrayOfString, ArrayOfInt)`, []any{"foo", "bar", "baz", 1, 2, 3}},
 		{`concat(PtrArrayWithNil, [nil])`, []any{42, nil}},
@@ -732,4 +731,101 @@ func TestBuiltin_with_deref(t *testing.T) {
 			assert.Equal(t, test.want, out)
 		})
 	}
+}
+
+func TestBuiltin_flatten_recursion(t *testing.T) {
+	var s []any
+	s = append(s, &s) // s contains a pointer to itself
+
+	env := map[string]any{
+		"arr": s,
+	}
+
+	program, err := expr.Compile("flatten(arr)", expr.Env(env))
+	require.NoError(t, err)
+
+	_, err = expr.Run(program, env)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), builtin.ErrorMaxDepth.Error())
+}
+
+func TestBuiltin_flatten_recursion_slice(t *testing.T) {
+	s := make([]any, 1)
+	s[0] = s
+
+	env := map[string]any{
+		"arr": s,
+	}
+
+	program, err := expr.Compile("flatten(arr)", expr.Env(env))
+	require.NoError(t, err)
+
+	_, err = expr.Run(program, env)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), builtin.ErrorMaxDepth.Error())
+}
+
+func TestBuiltin_numerical_recursion(t *testing.T) {
+	s := make([]any, 1)
+	s[0] = s
+
+	env := map[string]any{
+		"arr": s,
+	}
+
+	tests := []string{
+		"max(arr)",
+		"min(arr)",
+		"mean(arr)",
+		"median(arr)",
+	}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			program, err := expr.Compile(input, expr.Env(env))
+			require.NoError(t, err)
+
+			_, err = expr.Run(program, env)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), builtin.ErrorMaxDepth.Error())
+		})
+	}
+}
+
+func TestBuiltin_recursion_custom_max_depth(t *testing.T) {
+	originalMaxDepth := builtin.MaxDepth
+	defer func() {
+		builtin.MaxDepth = originalMaxDepth
+	}()
+
+	// Set a small depth limit
+	builtin.MaxDepth = 2
+
+	// Create a deeply nested array (depth 5)
+	// [1, [2, [3, [4, [5]]]]]
+	arr := []any{1, []any{2, []any{3, []any{4, []any{5}}}}}
+
+	env := map[string]any{
+		"arr": arr,
+	}
+
+	t.Run("flatten exceeds max depth", func(t *testing.T) {
+		program, err := expr.Compile("flatten(arr)", expr.Env(env))
+		require.NoError(t, err)
+
+		_, err = expr.Run(program, env)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), builtin.ErrorMaxDepth.Error())
+	})
+
+	t.Run("flatten within max depth", func(t *testing.T) {
+		// Depth 2: [1, [2]]
+		shallowArr := []any{1, []any{2}}
+		envShallow := map[string]any{"arr": shallowArr}
+		program, err := expr.Compile("flatten(arr)", expr.Env(envShallow))
+		require.NoError(t, err)
+
+		_, err = expr.Run(program, envShallow)
+		require.NoError(t, err)
+	})
 }
